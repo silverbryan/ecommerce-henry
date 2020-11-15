@@ -1,9 +1,8 @@
 const server = require("express").Router();
-const { User, Order, Product, Linea_Order } = require("../db.js");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
-var config = require("../configs/config");
-var { authenticateToken } = require("../middlewares/middleware");
+const { User, Order, Product, Linea_order, Reviews } = require("../db.js");
+const authorize = require("../helpers/auth");
+const userService = require("../controllers/userController");
+
 //Agregar un usuario
 server.post("/", (req, res, next) => {
   const {
@@ -15,6 +14,7 @@ server.post("/", (req, res, next) => {
     image,
     location_id,
   } = req.body;
+  console.log(name);
   if (!name || !email || !address || !password || !image)
     return res.status(400).json({
       message: "A parameter is missing",
@@ -38,7 +38,7 @@ server.post("/", (req, res, next) => {
 });
 
 //Actualizar un usuario
-server.put("/:id", (req, res, next) => {
+server.put("/:id", authorize(), (req, res, next) => {
   let { id } = req.params;
   let update = req.body;
 
@@ -86,6 +86,53 @@ server.delete("/:id", (req, res, next) => {
     .catch(next);
 });
 
+server.put('/:id/passwordChange', (req, res) => {
+  const id = req.params.id;
+  const { email, currentPassword, newPassword } = req.body;
+  console.log(newPassword);
+  User.findOne({
+    where: {
+      email,
+    }
+  })
+    .then(user => {
+      bcrypt.compare(currentPassword, user.dataValues.password, (error, response) => {
+        if (response) {
+          bcrypt
+            .hash(newPassword, 10)
+            .then((hash) => {
+              user.password = hash;
+              user.save()
+                .then(response => res.sendStatus(201));
+            })
+        } else {
+          res.sendStatus(404);
+        }
+      })
+    })
+});
+
+// Dar permisos de Admin a user
+server.put("/:id/promote", (req, res, next) => {
+  const { id } = req.params;
+  const { role } = req.body;
+
+  User.update(
+    {
+      role: role,
+    },
+    {
+      where: { id },
+    }
+  )
+    .then((user) => {
+      return res.json({
+        user,
+      });
+    })
+    .catch((error) => next(error.message));
+});
+
 //obtener todos los usuarios
 server.get("/", (req, res) => {
   User.findAll({
@@ -100,15 +147,6 @@ server.get("/", (req, res) => {
     .catch((err) => {
       return res.sendStatus(500);
     });
-
-});
-
-//obtener detalles de usuario por id//??nuevo
-server.get("/:id", (req, res) => {
-  const id = req.params.id;
-  User.findByPk(id).then((user) => {
-    return res.status(200).json(user);
-  });
 });
 
 //obtener todas las ordenes de un usuario en especifico
@@ -133,7 +171,7 @@ server.get("/order/cart/:id", (req, res, next) => {
     })
     .catch((err) => {
       next(err.message);
-
+    });
 });
 
 //obtener todas las ordenes de un usuario en especifico
@@ -168,7 +206,7 @@ server.get("/orders", (req, res) => {
       User,
       {
         model: Product,
-        through: Linea_Order,
+        through: Linea_order,
       },
     ],
     where: {
@@ -194,7 +232,6 @@ server.post("/:userId/cart/add", async (req, res, next) => {
   const { productId, quantity, orderId } = req.body;
 
   try {
-
     const { stock, price, id, name, image } = await Product.findOne({
       where: {
         id: productId,
@@ -239,20 +276,18 @@ server.post("/:userId/cart/add", async (req, res, next) => {
   }
 });
 
-// Agregar los productos al carrito
-server.post('/:userId/cart', async (req, res, next) => {
+// Agregar los productos del carrito guest al carrito del user
+server.post("/:userId/cart", async (req, res, next) => {
   const { productsCarts, orderId } = req.body;
   const { userId } = req.params;
 
   try {
-
     productsCarts.forEach(async (product) => {
-
-      const { stock, id: idProduct} = await Product.findOne({
+      const { stock, id: idProduct } = await Product.findOne({
         where: {
-          id: product.id
+          id: product.id,
         },
-        raw: true
+        raw: true,
       });
 
       // Verificar stock
@@ -271,21 +306,17 @@ server.post('/:userId/cart', async (req, res, next) => {
           product_id: idProduct,
           orderId: orderId,
           userId: userId,
-        }
+        },
       });
-
     });
 
     return res.json({
-      message: 'Se agregaron los productos',
-      productsCarts
+      message: "Se agregaron los productos",
+      productsCarts,
     });
-
-
   } catch (error) {
-    next(error.message)
+    next(error.message);
   }
-
 });
 
 //modificamos la cantidad de un producto en especifico, que se encuentre en el carrito
@@ -311,16 +342,20 @@ server.put("/:userId/cart/:productId", async (req, res) => {
     .then(async (orderline) => {
       if (!orderline) return res.sendStatus(404);
       if (amount === "addAmount") {
-        orderline.quantity += 1;
+        if (quantity < product.stock) {
+          orderline.quantity += 1;
+          orderline.total = orderline.quantity * product.price;
+        }
       } else if (amount === "deleteAmount") {
-        if (quantity !== 0) {
+        if (quantity > 1) {
           orderline.quantity -= 1;
+          orderline.total = orderline.total - product.price;
         } else if (quantity === 0) {
           orderline.quantity = quantity;
         }
       }
       await orderline.save();
-      return res.send({
+      return res.json({
         data: orderline,
       });
     })
@@ -378,7 +413,7 @@ server.delete("/:userId/cart/:productId", (req, res) => {
 //vacia el carrito
 server.delete("/:userId/cart", (req, res) => {
   const userId = req.params.userId;
-
+  console.log(userId);
   Order.findOne({
     where: {
       userId: userId,
@@ -420,61 +455,46 @@ server.get("/:userId/cart", (req, res) => {
     });
 });
 
-//Login de un usuario
-server.post("/login", (req, res) => {
-  var email = req.body.email.toLowerCase();
-  var password = req.body.password;
-  var tokenData = {
-    email: email,
-    // ANY DATA
-  };
-  User.findOne({
-    attributes: [
-      "id",
-      "name",
-      "password",
-      "email",
-      "address",
-      "role",
-      "phoneNumber",
-    ],
+server.get("/:userId/ordersall", (req, res) => {
+  const userId = req.params.userId;
+
+  Order.findAll({
+    include: [User, { model: Product }],
     where: {
-      email: email,
+      userId,
     },
   })
-    .then((user) => {
-      console.log();
-      bcrypt.compare(password, user.dataValues.password, (err, response) => {
-        if (err) {
-          console.log("error");
-        }
-        if (response) {
-          var token = jwt.sign(tokenData, config.llave, {
-            expiresIn: 60 * 60 * 24, // expires in 24 hours
-          });
-          return res.status(200).send({
-            token,
-            user: user,
-          });
-        } else {
-          return res.status(404).send({
-            error: "contraseña Erronea",
-          });
-        }
+    .then((order) => {
+      if (!order) {
+        return res.sendStatus(404);
+      }
+      return res.send({
+        data: order,
       });
     })
     .catch((err) => {
-      return res.status(404).send({
-        error: "Email invalido",
-      });
+      return res.sendStatus(500);
     });
 });
+//ruta que retorna todas las reviews de un usuario
+server.get("/:id/reviews", (req, res) => {
+  const userId = req.params.id;
 
-//Ruta de prueba con middleware
-server.get("/secure", authenticateToken, (req, res) => {
-  return res.status(200).send({
-    message: "Paso la verificación!!!!"
-  });
+  Reviews.findAll({
+    include: [{ model: User, attributes: ["name", "image"] }],
+    where: { userId },
+  })
+    .then((reviews) => res.status(200).json({ data: reviews }))
+    .catch((err) => console.log(err));
 });
+
+//AUTH
+//Login de un usuario
+server.post("/login", userService.login);
+//obtener "mis" detalles de usuario por id (client)
+server.get("/me", authorize(), userService.getByMyId);
+//obtener detalles de usuario por id (admin)
+server.get("/:id", authorize(), userService.getById);
+//}
 
 module.exports = server;

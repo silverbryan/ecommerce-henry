@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { Button, Container, Table } from "reactstrap";
 import { GearFill, Trash, Tools } from "react-bootstrap-icons";
 import { Link } from "react-router-dom";
@@ -6,15 +6,16 @@ import Swal from "sweetalert2";
 import apiCall from "../../../redux/api";
 import { useSelector, useDispatch } from "react-redux";
 import allActions from "../../../redux/actions/allActions";
+import { editCategory } from "../../../redux/actions/categoryActions";
 
 const InventoryTableCategory = () => {
-  /* Redux */
-  const data = useSelector((state) => state.category.category);
   const dispatch = useDispatch();
 
   useEffect(() => {
     dispatch(allActions.getCategory());
   }, []);
+
+  const data = useSelector((state) => state.category.category);
 
   const handleClick = (e, id, name) => {
     e.preventDefault();
@@ -33,14 +34,13 @@ const InventoryTableCategory = () => {
       confirmButtonText: "Si, eliminar!",
     }).then((result) => {
       if (result.isConfirmed) {
-        apiCall(`/category/${id}`, null, null, "delete").then((response) => {
+        let action = "delete";
+        dispatch(editCategory(id, action)).then((response) => {
           Swal.fire("Eliminado!", "El registro fue eliminado.", "success");
         });
       }
     });
   };
-
-  console.log(data);
 
   return (
     <Container>

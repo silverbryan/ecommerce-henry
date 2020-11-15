@@ -1,6 +1,6 @@
 import axios from "axios";
+import Toast from "../../components/alerts/toast";
 import * as actionTypes from "./actionTypes";
-import { deleteAllCart } from "./userActions";
 
 const url = `http://localhost:3001`;
 
@@ -18,13 +18,19 @@ export const getOrders = () => (dispatch) => {
     });
 };
 
-export const deleteOrder = (id) => (dispatch) => {
-  return axios
-    .delete(`${url}/order/${id}`)
+export const deleteOrder = (id, userId) => (dispatch) => {
+  axios.delete(`${url}/order/${id}`).then((res) => {
+    dispatch({
+      type: actionTypes.DELETE_ORDER,
+      order: id,
+    });
+  });
+  axios
+    .delete(`${url}/users/${userId}/cart`)
     .then((res) => {
       dispatch({
-        type: actionTypes.DELETE_ORDER,
-        order: id,
+        type: actionTypes.DELETE_ALL_CART,
+        order: res.data,
       });
     })
     .catch((err) => console.log(err));
@@ -42,7 +48,7 @@ export const getOneOrder = (userId) => (dispatch) => {
     .catch((err) => console.log(err));
 };
 
-export const updateStatusOrder = (id, status, userId) => (dispatch) => {
+export const updateStatusOrder = (id, status) => (dispatch) => {
   return axios
     .put(`${url}/order/${id}`, {
       status: status,
@@ -50,17 +56,24 @@ export const updateStatusOrder = (id, status, userId) => (dispatch) => {
     .then((res) => {
       dispatch({
         type: actionTypes.UPDATE_ORDER,
-        status: res.data.orderUpdate.status,
+        upOrder: res.data.orderUpdate,
       });
-      dispatch({
-        type: actionTypes.DELETE_ALL_CART,
+      Toast.fire({
+        icon: "success",
+        title: `Gracias por tu compra!`,
       });
+      // dispatch({
+      //   type: actionTypes.DELETE_ALL_CART,
+      // });
+    })
+    .catch((err) => {
+      console.log(err);
     });
 };
 
 // Line_order
 export const getOrderById = (orderId) => (dispatch) => {
-  axios.get(`${url}/order/${orderId}`).then((res) => {
+  return axios.get(`${url}/order/${orderId}`).then((res) => {
     dispatch({
       type: actionTypes.GET_ORDER_BY_ID,
       order: res.data[0],

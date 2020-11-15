@@ -19,7 +19,15 @@
 //     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 const server = require("./src/app.js");
 const { conn } = require("./src/db.js");
-const { loadProducts, loadCategories, loadProductCategories, loadUsers, loadReviews } = require('./src/loadData.js');
+const {
+  loadProducts,
+  loadCategories,
+  loadProductCategories,
+  loadUsers,
+  loadReviews,
+  loadOrders,
+  loadLineaOrders,
+} = require("./src/loadData.js");
 // Syncing all the models at once.
 conn.sync({ force: true }).then(() => {
   loadProducts();
@@ -27,6 +35,7 @@ conn.sync({ force: true }).then(() => {
   loadProductCategories();
   loadUsers();
   loadReviews();
+  loadOrders();
 
   console.log("\nSe han precargado los productos exitosamente!\n");
 

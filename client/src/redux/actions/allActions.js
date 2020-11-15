@@ -1,22 +1,24 @@
-import { getProducts, getOneProduct, editProduct } from "./productActions";
-import { getCategory, editCategory } from "./categoryActions";
-
-import { deleteProdCategory } from "./productCategoryActions";
+import { getProducts, getOneProduct } from "./productActions";
+import { getCategory } from "./categoryActions";
 import { editUser, getUsers } from "./userActions";
-import { getOrders, deleteOrder, getOneOrder, updateStatusOrder} from "./ordenActions";
+import {
+  getOrders,
+  deleteOrder,
+  getOneOrder,
+  updateStatusOrder,
+} from "./ordenActions";
 
 const allActions = {
   getProducts,
   getOneProduct,
   getCategory,
-  editCategory,
-  // deleteProdCategory,
+  //editCategory,
   editUser,
   getUsers,
   getOrders,
   deleteOrder,
   getOneOrder,
-  updateStatusOrder
+  updateStatusOrder,
 };
 
 export default allActions;
